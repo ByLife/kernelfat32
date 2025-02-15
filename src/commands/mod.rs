@@ -1,6 +1,6 @@
 // src/command/mod.rs
 
-// fichier pour les commandes
+// fichier pour les commandes shell
 
 use alloc::string::String;
 use alloc::vec::Vec;
