@@ -1,5 +1,7 @@
 // src/command/mod.rs
 
+// fichier pour les commandes
+
 use alloc::string::String;
 use alloc::vec::Vec;
 use crate::print;
