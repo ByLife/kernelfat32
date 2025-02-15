@@ -1,4 +1,3 @@
-// src/task/keyboard.rs
 use crate::{print, println};
 use conquer_once::spin::OnceCell;
 use core::{
@@ -11,9 +10,12 @@ use futures_util::{
     task::AtomicWaker,
 };
 use pc_keyboard::{layouts, DecodedKey, HandleControl, Keyboard, ScancodeSet1};
+use alloc::boxed::Box;
+use crate::commands::CommandBuffer;
 
 static SCANCODE_QUEUE: OnceCell<ArrayQueue<u8>> = OnceCell::uninit();
 static WAKER: AtomicWaker = AtomicWaker::new();
+static COMMAND_BUFFER: OnceCell<Box<spin::Mutex<CommandBuffer>>> = OnceCell::uninit();
 
 /// Called by the keyboard interrupt handler
 ///
@@ -75,12 +77,26 @@ pub async fn print_keypresses() {
         HandleControl::Ignore,
     );
 
+    // Initialize command buffer
+    COMMAND_BUFFER.try_init_once(|| {
+        Box::new(spin::Mutex::new(CommandBuffer::new()))
+    }).expect("CommandBuffer already initialized");
+
+    print!("> "); // Initial prompt
+
     while let Some(scancode) = scancodes.next().await {
         if let Ok(Some(key_event)) = keyboard.add_byte(scancode) {
             if let Some(key) = keyboard.process_keyevent(key_event) {
                 match key {
-                    DecodedKey::Unicode(character) => print!("{}", character),
-                    DecodedKey::RawKey(key) => print!("{:?}", key),
+                    DecodedKey::Unicode(character) => {
+                        match character {
+                            '\n' => COMMAND_BUFFER.try_get().unwrap().lock().execute(),
+                            '\x08' => COMMAND_BUFFER.try_get().unwrap().lock().backspace(), // Backspace
+                            c if c.is_ascii() => COMMAND_BUFFER.try_get().unwrap().lock().add_char(c),
+                            _ => (), // Ignore non-ASCII characters
+                        }
+                    },
+                    DecodedKey::RawKey(_) => (), // Ignore raw keys
                 }
             }
         }
