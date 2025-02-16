@@ -20,7 +20,7 @@ static COMMAND_BUFFER: OnceCell<Box<spin::Mutex<CommandBuffer>>> = OnceCell::uni
 /// Called by the keyboard interrupt handler
 ///
 /// Must not block or allocate.
-pub(crate) fn add_scancode(scancode: u8) {
+pub(crate) fn add_scancode(scancode: u8) { // pour les interruptions clavier
     if let Ok(queue) = SCANCODE_QUEUE.try_get() {
         if let Err(_) = queue.push(scancode) {
             println!("WARNING: scancode queue full; dropping keyboard input");
@@ -32,11 +32,11 @@ pub(crate) fn add_scancode(scancode: u8) {
     }
 }
 
-pub struct ScancodeStream {
+pub struct ScancodeStream { 
     _private: (),
 }
 
-impl ScancodeStream {
+impl ScancodeStream { // impl pour ScancodeStream qui fait partie de futures_util
     pub fn new() -> Self {
         SCANCODE_QUEUE
             .try_init_once(|| ArrayQueue::new(100))
@@ -45,7 +45,7 @@ impl ScancodeStream {
     }
 }
 
-impl Stream for ScancodeStream {
+impl Stream for ScancodeStream { // pour les interruptions clavier et les scancodes
     type Item = u8;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<u8>> {
@@ -77,12 +77,12 @@ pub async fn print_keypresses() {
         HandleControl::Ignore,
     );
 
-    // Initialize command buffer
+    // buffer d'initialisation
     COMMAND_BUFFER.try_init_once(|| {
         Box::new(spin::Mutex::new(CommandBuffer::new()))
     }).expect("CommandBuffer already initialized");
 
-    print!("> "); // Initial prompt
+    print!("> "); // prompt par défaut pour le shell
 
     while let Some(scancode) = scancodes.next().await {
         if let Ok(Some(key_event)) = keyboard.add_byte(scancode) {
@@ -93,10 +93,10 @@ pub async fn print_keypresses() {
                             '\n' => COMMAND_BUFFER.try_get().unwrap().lock().execute(),
                             '\x08' => COMMAND_BUFFER.try_get().unwrap().lock().backspace(), // Backspace
                             c if c.is_ascii() => COMMAND_BUFFER.try_get().unwrap().lock().add_char(c),
-                            _ => (), // Ignore non-ASCII characters
+                            _ => (), // ignorer les caractères non-ASCII
                         }
                     },
-                    DecodedKey::RawKey(_) => (), // Ignore raw keys
+                    DecodedKey::RawKey(_) => (), // Ignorer les touches spéciales
                 }
             }
         }
