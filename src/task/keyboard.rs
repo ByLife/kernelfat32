@@ -12,7 +12,6 @@ use futures_util::{
 use pc_keyboard::{layouts, DecodedKey, HandleControl, Keyboard, ScancodeSet1};
 use alloc::boxed::Box;
 use crate::commands::CommandBuffer;
-
 static SCANCODE_QUEUE: OnceCell<ArrayQueue<u8>> = OnceCell::uninit();
 static WAKER: AtomicWaker = AtomicWaker::new();
 static COMMAND_BUFFER: OnceCell<Box<spin::Mutex<CommandBuffer>>> = OnceCell::uninit();
