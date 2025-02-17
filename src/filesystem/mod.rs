@@ -1,8 +1,8 @@
-use alloc::string::String;
 use alloc::vec::Vec;
+use lazy_static::lazy_static;
 use spin::Mutex;
 
-// Struct pour représenter structure de données FAT32
+// Structure pour représenter une entrée FAT32
 #[derive(Debug, Clone, Copy)]
 #[repr(C, packed)]
 pub struct FatEntry {
@@ -17,10 +17,10 @@ pub struct FatEntry {
     size: u32,
 }
 
-// structure fat 32 boot sector
+// Structure pour le secteur de boot FAT32
 #[derive(Debug, Clone, Copy)]
 #[repr(C, packed)]
-pub struct Fat32BootSector {
+pub struct Fat32BootSector { // reproduction du secteur de boot FAT32
     jmp_boot: [u8; 3],
     oem_name: [u8; 8],
     bytes_per_sector: u16,
@@ -50,34 +50,34 @@ pub struct Fat32BootSector {
     fs_type: [u8; 8],
 }
 
+#[derive(Debug)]
 pub struct FileSystem {
     boot_sector: Fat32BootSector,
     fat_table: Vec<u32>,
     data_region: Vec<u8>,
 }
 
-impl FileSystem {
+impl FileSystem { // sert à initialiser le système de fichiers
     pub fn new() -> Self {
-        // init avec des values par défaut
         let boot_sector = Fat32BootSector {
-            jmp_boot: [0xEB, 0x58, 0x90],  // jump instruction
-            oem_name: *b"MSWIN4.1",        // oem name
+            jmp_boot: [0xEB, 0x58, 0x90],
+            oem_name: *b"MSWIN4.1",
             bytes_per_sector: 512,
             sectors_per_cluster: 1,
             reserved_sectors: 32,
             num_fats: 2,
-            root_entries: 0,               // toujours 0 pour FAT32
-            total_sectors_16: 0,           // pour FAT32, utiliser total_sectors_32
-            media: 0xF8,                   // type de média fixe
-            fat_size_16: 0,               // non utilisé en FAT32
+            root_entries: 0,
+            total_sectors_16: 0,
+            media: 0xF8,
+            fat_size_16: 0,
             sectors_per_track: 32,
             num_heads: 64,
             hidden_sectors: 0,
-            total_sectors_32: 0x2000,      // 8192 secteurs de 512 octets
-            fat_size_32: 32,              // taille de la FAT en secteurs
+            total_sectors_32: 0x2000,
+            fat_size_32: 32,
             ext_flags: 0,
             fs_version: 0,
-            root_cluster: 2,              // 1er cluster de la racine
+            root_cluster: 2,
             fs_info: 1,
             backup_boot_sector: 6,
             reserved: [0; 12],
@@ -89,16 +89,13 @@ impl FileSystem {
             fs_type: *b"FAT32   ",
         };
 
-        // initialisation d'une FAT simple
         let fat_size = (boot_sector.fat_size_32 as usize) * (boot_sector.bytes_per_sector as usize);
         let mut fat_table = Vec::with_capacity(fat_size / 4);
         fat_table.resize(fat_size / 4, 0);
 
-        // marquer les deux premiers clusters comme utilisés
         fat_table[0] = 0x0FFFFF00;
         fat_table[1] = 0x0FFFFFFF;
 
-        // region de données initiale
         let data_size = (boot_sector.total_sectors_32 as usize - boot_sector.reserved_sectors as usize 
             - (boot_sector.num_fats as usize * boot_sector.fat_size_32 as usize)) 
             * boot_sector.bytes_per_sector as usize;
@@ -112,18 +109,17 @@ impl FileSystem {
         }
     }
 
-    // fonction pour allouer un cluster
     pub fn allocate_cluster(&mut self) -> Option<u32> {
         for (i, &entry) in self.fat_table.iter().enumerate() {
             if entry == 0 {
-                self.fat_table[i] = 0x0FFFFFFF;  //  marqueur de fin de fichier
+                self.fat_table[i] = 0x0FFFFFFF;
                 return Some(i as u32);
             }
         }
         None
     }
 
-    pub fn read_cluster(&self, cluster: u32) -> Option<&[u8]> {
+    pub fn read_cluster(&self, cluster: u32) -> Option<&[u8]> { // lecture d'un cluster
         let start = (cluster as usize - 2) * (self.boot_sector.sectors_per_cluster as usize 
             * self.boot_sector.bytes_per_sector as usize);
         if start >= self.data_region.len() {
@@ -134,7 +130,7 @@ impl FileSystem {
         Some(&self.data_region[start..end])
     }
 
-    pub fn write_cluster(&mut self, cluster: u32, data: &[u8]) -> bool {
+    pub fn write_cluster(&mut self, cluster: u32, data: &[u8]) -> bool { // écriture d'un cluster
         let start = (cluster as usize - 2) * (self.boot_sector.sectors_per_cluster as usize 
             * self.boot_sector.bytes_per_sector as usize);
         if start >= self.data_region.len() {
@@ -149,7 +145,6 @@ impl FileSystem {
     }
 }
 
-// instance globale du système de fichiers
 lazy_static! {
-    pub static ref FILESYSTEM: Mutex<FileSystem> = Mutex::new(FileSystem::new());
+    pub static ref FS: Mutex<FileSystem> = Mutex::new(FileSystem::new()); // initialisation du système de fichiers
 }
