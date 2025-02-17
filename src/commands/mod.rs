@@ -1,15 +1,10 @@
-// src/command/mod.rs
-
-// fichier pour les commandes shell
-
 use alloc::string::String;
-use alloc::vec::Vec;
-use crate::print;
-use crate::println;
+use crate::{print, println};
+use crate::filesystem::FS;
 
 const MAX_CMD_LENGTH: usize = 100;
 
-pub struct CommandBuffer { // structure pour stocker la commande
+pub struct CommandBuffer {
     buffer: String,
 }
 
@@ -20,7 +15,7 @@ impl CommandBuffer {
         }
     }
 
-    pub fn add_char(&mut self, c: char) { // juste pour ajouter un caractère à la commande
+    pub fn add_char(&mut self, c: char) {
         if self.buffer.len() < MAX_CMD_LENGTH {
             self.buffer.push(c);
             print!("{}", c);
@@ -30,26 +25,79 @@ impl CommandBuffer {
     pub fn backspace(&mut self) {
         if !self.buffer.is_empty() {
             self.buffer.pop();
-            print!("\x08 \x08"); // backspace pour effacer le caractère et le remplacer par un espace
+            print!("\x08 \x08"); // backspace pour effacer le caractère
         }
     }
 
     pub fn execute(&mut self) {
-        println!(); // New line after command
-        let cmd = self.buffer.trim();
-        if !cmd.is_empty() {
-            match cmd {
+        println!();
+        let input = self.buffer.trim();
+        
+        if !input.is_empty() {
+            let parts: alloc::vec::Vec<&str> = input.split_whitespace().collect();
+            let command = parts[0];
+            let args = &parts[1..];
+
+            match command {
                 "help" => print_help(),
-                _ => println!("Commande non reconnue: '{}'. Mettez 'help' afin d'afficher la lsite des commandes.", cmd),
+                "touch" => {
+                    if args.len() != 1 {
+                        println!("Usage: touch <filename>");
+                    } else {
+                        match FS.lock().create_file(args[0]) {
+                            Ok(_) => println!("Fichier créé: {}", args[0]),
+                            Err(e) => println!("Erreur de création du fichier: {:?}", e),
+                        }
+                    }
+                },
+                "cat" => {
+                    if args.len() != 1 {
+                        println!("Usage: cat <filename>");
+                    } else {
+                        match FS.lock().read_file(args[0]) {
+                            Ok(content) => println!("{}", content),
+                            Err(e) => println!("Erreur de lecture du fichier: {:?}", e),
+                        }
+                    }
+                },
+                "write" => {
+                    if args.len() < 2 {
+                        println!("Usage: write <filename> <content>");
+                    } else {
+                        let content = args[1..].join(" ");
+                        match FS.lock().write_file(args[0], &content) {
+                            Ok(_) => println!("Contenu écrit dans le fichier: {}", args[0]),
+                            Err(e) => println!("Erreur d'écriture du fichier: {:?}", e),
+                        }
+                    }
+                },
+                "ls" => {
+                    match FS.lock().list_files() {
+                        Ok(files) => {
+                            if files.is_empty() {
+                                println!("Aucun fichier dans le répertoire");
+                            } else {
+                                for file in files {
+                                    println!("{}", file);
+                                }
+                            }
+                        },
+                        Err(e) => println!("Erreur de lecture du répertoire: {:?}", e),
+                    }
+                },
+                _ => println!("Commande inconnue: {}, taper 'help' pour afficher l'aide", command),
             }
         }
         self.buffer.clear();
-        print!("> "); // nouveau prompt
+        print!("> ");
     }
 }
 
 fn print_help() {
-    println!("Commandes valables:");
-    println!("  help    - Aide sur les commandes disponibles");
-    println!("  TODO: Plein de commandes arrivent bientôt !");
+    println!("Commandes disponibles:");
+    println!("  help             - Affichage de l'aide");
+    println!("  touch <filename> - Création d'un fichier");
+    println!("  cat <filename>   - Affichage du contenu d'un fichier");
+    println!("  write <filename> <content> - Ecrire dans un fichier");
+    println!("  ls              - Liste des fichiers");
 }

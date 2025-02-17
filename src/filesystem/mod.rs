@@ -1,8 +1,18 @@
+use alloc::vec;
 use alloc::vec::Vec;
+use alloc::string::String;
 use lazy_static::lazy_static;
 use spin::Mutex;
 
-// Structure pour représenter une entrée FAT32
+#[derive(Debug)]
+pub enum FsError {
+    FileNotFound,
+    FileAlreadyExists,
+    NoSpace,
+    InvalidName,
+    SystemError,
+}
+
 #[derive(Debug, Clone, Copy)]
 #[repr(C, packed)]
 pub struct FatEntry {
@@ -17,10 +27,9 @@ pub struct FatEntry {
     size: u32,
 }
 
-// Structure pour le secteur de boot FAT32
 #[derive(Debug, Clone, Copy)]
 #[repr(C, packed)]
-pub struct Fat32BootSector { // reproduction du secteur de boot FAT32
+pub struct Fat32BootSector {
     jmp_boot: [u8; 3],
     oem_name: [u8; 8],
     bytes_per_sector: u16,
@@ -50,14 +59,34 @@ pub struct Fat32BootSector { // reproduction du secteur de boot FAT32
     fs_type: [u8; 8],
 }
 
+#[derive(Debug, Clone)]
+pub struct FileEntry {
+    name: String,
+    first_cluster: u32,
+    size: u32,
+    is_directory: bool,
+}
+
+impl FileEntry {
+    pub fn new(name: String, first_cluster: u32) -> Self {
+        FileEntry {
+            name,
+            first_cluster,
+            size: 0,
+            is_directory: false,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct FileSystem {
     boot_sector: Fat32BootSector,
     fat_table: Vec<u32>,
     data_region: Vec<u8>,
+    files: Vec<FileEntry>,
 }
 
-impl FileSystem { // sert à initialiser le système de fichiers
+impl FileSystem {
     pub fn new() -> Self {
         let boot_sector = Fat32BootSector {
             jmp_boot: [0xEB, 0x58, 0x90],
@@ -89,27 +118,103 @@ impl FileSystem { // sert à initialiser le système de fichiers
             fs_type: *b"FAT32   ",
         };
 
-        let fat_size = (boot_sector.fat_size_32 as usize) * (boot_sector.bytes_per_sector as usize);
-        let mut fat_table = Vec::with_capacity(fat_size / 4);
-        fat_table.resize(fat_size / 4, 0);
-
-        fat_table[0] = 0x0FFFFF00;
-        fat_table[1] = 0x0FFFFFFF;
-
-        let data_size = (boot_sector.total_sectors_32 as usize - boot_sector.reserved_sectors as usize 
-            - (boot_sector.num_fats as usize * boot_sector.fat_size_32 as usize)) 
-            * boot_sector.bytes_per_sector as usize;
-        let mut data_region = Vec::with_capacity(data_size);
-        data_region.resize(data_size, 0);
-
-        FileSystem {
+        let mut fs = FileSystem {
             boot_sector,
-            fat_table,
-            data_region,
-        }
+            fat_table: Vec::new(),
+            data_region: Vec::new(),
+            files: Vec::new(),
+        };
+
+        let fat_size = (fs.boot_sector.fat_size_32 as usize) * (fs.boot_sector.bytes_per_sector as usize);
+        fs.fat_table = vec![0; fat_size / 4];
+        fs.fat_table[0] = 0x0FFFFF00;
+        fs.fat_table[1] = 0x0FFFFFFF;
+
+        let data_size = (fs.boot_sector.total_sectors_32 as usize 
+            - fs.boot_sector.reserved_sectors as usize 
+            - (fs.boot_sector.num_fats as usize * fs.boot_sector.fat_size_32 as usize)) 
+            * fs.boot_sector.bytes_per_sector as usize;
+        fs.data_region = vec![0; data_size];
+
+        fs
     }
 
-    pub fn allocate_cluster(&mut self) -> Option<u32> {
+    pub fn create_file(&mut self, name: &str) -> Result<(), FsError> {
+        if name.len() > 255 {
+            return Err(FsError::InvalidName);
+        }
+
+        if self.files.iter().any(|f| f.name == name) {
+            return Err(FsError::FileAlreadyExists);
+        }
+
+        let cluster = self.allocate_cluster().ok_or(FsError::NoSpace)?;
+        let file_entry = FileEntry::new(String::from(name), cluster);
+        self.files.push(file_entry);
+        Ok(())
+    }
+
+    pub fn write_file(&mut self, name: &str, content: &str) -> Result<(), FsError> {
+        let content_bytes = content.as_bytes();
+        let cluster_size = self.boot_sector.sectors_per_cluster as usize 
+            * self.boot_sector.bytes_per_sector as usize;
+
+        // Trouver l'index du fichier au lieu d'une référence mutabl
+        let file_index = self.files.iter()
+            .position(|f| f.name == name)
+            .ok_or(FsError::FileNotFound)?;
+
+        let mut current_cluster = self.files[file_index].first_cluster;
+        let mut bytes_written = 0;
+
+        for chunk in content_bytes.chunks(cluster_size) {
+            if !self.write_cluster(current_cluster, chunk) {
+                return Err(FsError::SystemError);
+            }
+            bytes_written += chunk.len();
+
+            if bytes_written < content_bytes.len() {
+                let next_cluster = self.allocate_cluster().ok_or(FsError::NoSpace)?;
+                self.fat_table[current_cluster as usize] = next_cluster;
+                current_cluster = next_cluster;
+            } else {
+                self.fat_table[current_cluster as usize] = 0x0FFFFFFF;
+            }
+        }
+
+        self.files[file_index].size = content_bytes.len() as u32;
+        Ok(())
+    }
+
+    pub fn read_file(&self, name: &str) -> Result<String, FsError> {
+        let file = self.files.iter()
+            .find(|f| f.name == name)
+            .ok_or(FsError::FileNotFound)?;
+
+        let mut content = Vec::new();
+        let mut current_cluster = file.first_cluster;
+
+        while let Some(data) = self.read_cluster(current_cluster) {
+            content.extend_from_slice(data);
+            if let Some(&next_cluster) = self.fat_table.get(current_cluster as usize) {
+                if next_cluster >= 0x0FFFFFF8 {
+                    break;
+                }
+                current_cluster = next_cluster;
+            } else {
+                break;
+            }
+        }
+
+        content.truncate(file.size as usize);
+        String::from_utf8(content).map_err(|_| FsError::SystemError)
+    }
+
+    pub fn list_files(&self) -> Result<Vec<String>, FsError> {
+        Ok(self.files.iter().map(|f| f.name.clone()).collect())
+    }
+
+    fn allocate_cluster(&mut self) -> Option<u32> {
         for (i, &entry) in self.fat_table.iter().enumerate() {
             if entry == 0 {
                 self.fat_table[i] = 0x0FFFFFFF;
@@ -119,32 +224,42 @@ impl FileSystem { // sert à initialiser le système de fichiers
         None
     }
 
-    pub fn read_cluster(&self, cluster: u32) -> Option<&[u8]> { // lecture d'un cluster
-        let start = (cluster as usize - 2) * (self.boot_sector.sectors_per_cluster as usize 
-            * self.boot_sector.bytes_per_sector as usize);
+    fn read_cluster(&self, cluster: u32) -> Option<&[u8]> {
+        let cluster_size = self.boot_sector.sectors_per_cluster as usize 
+            * self.boot_sector.bytes_per_sector as usize;
+        let start = (cluster as usize - 2) * cluster_size;
+        
         if start >= self.data_region.len() {
             return None;
         }
-        let end = start + (self.boot_sector.sectors_per_cluster as usize 
-            * self.boot_sector.bytes_per_sector as usize);
+        
+        let end = start + cluster_size;
+        if end > self.data_region.len() {
+            return None;
+        }
+        
         Some(&self.data_region[start..end])
     }
 
-    pub fn write_cluster(&mut self, cluster: u32, data: &[u8]) -> bool { // écriture d'un cluster
-        let start = (cluster as usize - 2) * (self.boot_sector.sectors_per_cluster as usize 
-            * self.boot_sector.bytes_per_sector as usize);
+    fn write_cluster(&mut self, cluster: u32, data: &[u8]) -> bool {
+        let cluster_size = self.boot_sector.sectors_per_cluster as usize 
+            * self.boot_sector.bytes_per_sector as usize;
+        let start = (cluster as usize - 2) * cluster_size;
+        
         if start >= self.data_region.len() {
             return false;
         }
+        
         let end = start + data.len();
         if end > self.data_region.len() {
             return false;
         }
+        
         self.data_region[start..end].copy_from_slice(data);
         true
     }
 }
 
 lazy_static! {
-    pub static ref FS: Mutex<FileSystem> = Mutex::new(FileSystem::new()); // initialisation du système de fichiers
+    pub static ref FS: Mutex<FileSystem> = Mutex::new(FileSystem::new());
 }
