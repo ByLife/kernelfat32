@@ -2,7 +2,7 @@ use alloc::string::String;
 use crate::{print, println};
 use crate::filesystem::FS;
 
-const MAX_CMD_LENGTH: usize = 128; // augmenté à 128 caractères
+const MAX_CMD_LENGTH: usize = 64; // augmenté à 64 caractères
 
 pub struct CommandBuffer {
     buffer: String,
@@ -38,8 +38,8 @@ impl CommandBuffer {
             let command = parts[0];
             let args = &parts[1..];
 
-            match command {
-                "help" => print_help(),
+            match command { // match pour les commandes
+                "help" => print_help(), 
                 "touch" => {
                     if args.len() != 1 {
                         println!("usage: touch <filename>");
