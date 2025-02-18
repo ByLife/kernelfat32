@@ -2,7 +2,7 @@ use alloc::string::String;
 use crate::{print, println};
 use crate::filesystem::FS;
 
-const MAX_CMD_LENGTH: usize = 16; // commandes tres courtes
+const MAX_CMD_LENGTH: usize = 128; // augmenté à 128 caractères
 
 pub struct CommandBuffer {
     buffer: String,

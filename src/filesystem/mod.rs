@@ -36,12 +36,12 @@ pub struct FileSystem {
 impl FileSystem {
     pub fn new() -> Self {
         FileSystem {
-            files: Vec::with_capacity(10), // on reserve de la place pour 10 fichiers
+            files: Vec::with_capacity(50), // on reserve de la place pour 50 fichiers
         }
     }
 
     pub fn create_file(&mut self, name: &str) -> Result<(), FsError> {
-        if name.len() > 16 {
+        if name.len() > 64 { // j'augmente le nom à max 64 caractères
             return Err(FsError::InvalidName);
         }
 
