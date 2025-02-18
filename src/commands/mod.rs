@@ -2,7 +2,7 @@ use alloc::string::String;
 use crate::{print, println};
 use crate::filesystem::FS;
 
-const MAX_CMD_LENGTH: usize = 100;
+const MAX_CMD_LENGTH: usize = 50; // reduit pour utiliser moins de memoire
 
 pub struct CommandBuffer {
     buffer: String,
@@ -25,7 +25,7 @@ impl CommandBuffer {
     pub fn backspace(&mut self) {
         if !self.buffer.is_empty() {
             self.buffer.pop();
-            print!("\x08 \x08"); // backspace pour effacer le caractère
+            print!("\x08 \x08");
         }
     }
 
@@ -42,32 +42,32 @@ impl CommandBuffer {
                 "help" => print_help(),
                 "touch" => {
                     if args.len() != 1 {
-                        println!("Usage: touch <filename>");
+                        println!("usage: touch <filename>");
                     } else {
                         match FS.lock().create_file(args[0]) {
-                            Ok(_) => println!("Fichier créé: {}", args[0]),
-                            Err(e) => println!("Erreur de création du fichier: {:?}", e),
+                            Ok(_) => println!("fichier cree: {}", args[0]),
+                            Err(e) => println!("erreur: {:?}", e),
                         }
                     }
                 },
                 "cat" => {
                     if args.len() != 1 {
-                        println!("Usage: cat <filename>");
+                        println!("usage: cat <filename>");
                     } else {
                         match FS.lock().read_file(args[0]) {
                             Ok(content) => println!("{}", content),
-                            Err(e) => println!("Erreur de lecture du fichier: {:?}", e),
+                            Err(e) => println!("erreur: {:?}", e),
                         }
                     }
                 },
                 "write" => {
                     if args.len() < 2 {
-                        println!("Usage: write <filename> <content>");
+                        println!("usage: write <filename> <contenu>");
                     } else {
                         let content = args[1..].join(" ");
                         match FS.lock().write_file(args[0], &content) {
-                            Ok(_) => println!("Contenu écrit dans le fichier: {}", args[0]),
-                            Err(e) => println!("Erreur d'écriture du fichier: {:?}", e),
+                            Ok(_) => println!("ecrit dans: {}", args[0]),
+                            Err(e) => println!("erreur: {:?}", e),
                         }
                     }
                 },
@@ -75,17 +75,17 @@ impl CommandBuffer {
                     match FS.lock().list_files() {
                         Ok(files) => {
                             if files.is_empty() {
-                                println!("Aucun fichier dans le répertoire");
+                                println!("pas de fichiers");
                             } else {
                                 for file in files {
                                     println!("{}", file);
                                 }
                             }
                         },
-                        Err(e) => println!("Erreur de lecture du répertoire: {:?}", e),
+                        Err(e) => println!("erreur: {:?}", e),
                     }
                 },
-                _ => println!("Commande inconnue: {}, taper 'help' pour afficher l'aide", command),
+                _ => println!("commande inconnue: '{}'. tape 'help'", command),
             }
         }
         self.buffer.clear();
@@ -94,10 +94,10 @@ impl CommandBuffer {
 }
 
 fn print_help() {
-    println!("Commandes disponibles:");
-    println!("  help             - Affichage de l'aide");
-    println!("  touch <filename> - Création d'un fichier");
-    println!("  cat <filename>   - Affichage du contenu d'un fichier");
-    println!("  write <filename> <content> - Ecrire dans un fichier");
-    println!("  ls              - Liste des fichiers");
+    println!("commandes dispo:");
+    println!("  help             - montre l'aide");
+    println!("  touch <fichier>  - cree un fichier");
+    println!("  cat <fichier>    - affiche un fichier");
+    println!("  write <fichier> <texte> - ecrit dans un fichier");
+    println!("  ls              - liste les fichiers");
 }

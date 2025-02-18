@@ -4,6 +4,7 @@ use alloc::string::String;
 use lazy_static::lazy_static;
 use spin::Mutex;
 
+// les erreurs qu'on peut avoir avec le systeme de fichiers
 #[derive(Debug)]
 pub enum FsError {
     FileNotFound,
@@ -13,58 +14,12 @@ pub enum FsError {
     SystemError,
 }
 
-#[derive(Debug, Clone, Copy)]
-#[repr(C, packed)]
-pub struct FatEntry {
-    name: [u8; 8],
-    extension: [u8; 3],
-    attributes: u8,
-    reserved: [u8; 10],
-    cluster_high: u16,
-    time: u16,
-    date: u16,
-    cluster_low: u16,
-    size: u32,
-}
-
-#[derive(Debug, Clone, Copy)]
-#[repr(C, packed)]
-pub struct Fat32BootSector {
-    jmp_boot: [u8; 3],
-    oem_name: [u8; 8],
-    bytes_per_sector: u16,
-    sectors_per_cluster: u8,
-    reserved_sectors: u16,
-    num_fats: u8,
-    root_entries: u16,
-    total_sectors_16: u16,
-    media: u8,
-    fat_size_16: u16,
-    sectors_per_track: u16,
-    num_heads: u16,
-    hidden_sectors: u32,
-    total_sectors_32: u32,
-    fat_size_32: u32,
-    ext_flags: u16,
-    fs_version: u16,
-    root_cluster: u32,
-    fs_info: u16,
-    backup_boot_sector: u16,
-    reserved: [u8; 12],
-    drive_number: u8,
-    reserved1: u8,
-    boot_signature: u8,
-    volume_id: u32,
-    volume_label: [u8; 11],
-    fs_type: [u8; 8],
-}
-
+// structure pour une entrée fat32 classique
 #[derive(Debug, Clone)]
 pub struct FileEntry {
     name: String,
     first_cluster: u32,
     size: u32,
-    is_directory: bool,
 }
 
 impl FileEntry {
@@ -73,14 +28,13 @@ impl FileEntry {
             name,
             first_cluster,
             size: 0,
-            is_directory: false,
         }
     }
 }
 
+// systeme de fichiers simple en memoire
 #[derive(Debug)]
 pub struct FileSystem {
-    boot_sector: Fat32BootSector,
     fat_table: Vec<u32>,
     data_region: Vec<u8>,
     files: Vec<FileEntry>,
@@ -88,57 +42,23 @@ pub struct FileSystem {
 
 impl FileSystem {
     pub fn new() -> Self {
-        let boot_sector = Fat32BootSector {
-            jmp_boot: [0xEB, 0x58, 0x90],
-            oem_name: *b"MSWIN4.1",
-            bytes_per_sector: 512,
-            sectors_per_cluster: 1,
-            reserved_sectors: 32,
-            num_fats: 2,
-            root_entries: 0,
-            total_sectors_16: 0,
-            media: 0xF8,
-            fat_size_16: 0,
-            sectors_per_track: 32,
-            num_heads: 64,
-            hidden_sectors: 0,
-            total_sectors_32: 0x2000,
-            fat_size_32: 32,
-            ext_flags: 0,
-            fs_version: 0,
-            root_cluster: 2,
-            fs_info: 1,
-            backup_boot_sector: 6,
-            reserved: [0; 12],
-            drive_number: 0x80,
-            reserved1: 0,
-            boot_signature: 0x29,
-            volume_id: 0x1234_5678,
-            volume_label: *b"NO NAME    ",
-            fs_type: *b"FAT32   ",
-        };
+        // on fait un petit fs de 1 mio pour commencer
+        let fat_size = 1024 * 1024 / 4; // 1 mio divisé par 4 car u32
+        let mut fat_table = vec![0; fat_size];
+        fat_table[0] = 0x0FFFFF00;
+        fat_table[1] = 0x0FFFFFFF;
 
-        let mut fs = FileSystem {
-            boot_sector,
-            fat_table: Vec::new(),
-            data_region: Vec::new(),
+        // region de données de 1 mio aussi
+        let data_region = vec![0; 1024 * 1024];
+
+        FileSystem {
+            fat_table,
+            data_region,
             files: Vec::new(),
-        };
-
-        let fat_size = (fs.boot_sector.fat_size_32 as usize) * (fs.boot_sector.bytes_per_sector as usize);
-        fs.fat_table = vec![0; fat_size / 4];
-        fs.fat_table[0] = 0x0FFFFF00;
-        fs.fat_table[1] = 0x0FFFFFFF;
-
-        let data_size = (fs.boot_sector.total_sectors_32 as usize 
-            - fs.boot_sector.reserved_sectors as usize 
-            - (fs.boot_sector.num_fats as usize * fs.boot_sector.fat_size_32 as usize)) 
-            * fs.boot_sector.bytes_per_sector as usize;
-        fs.data_region = vec![0; data_size];
-
-        fs
+        }
     }
 
+    // crée un nouveau fichier
     pub fn create_file(&mut self, name: &str) -> Result<(), FsError> {
         if name.len() > 255 {
             return Err(FsError::InvalidName);
@@ -154,12 +74,11 @@ impl FileSystem {
         Ok(())
     }
 
+    // ecrit du contenu dans un fichier
     pub fn write_file(&mut self, name: &str, content: &str) -> Result<(), FsError> {
         let content_bytes = content.as_bytes();
-        let cluster_size = self.boot_sector.sectors_per_cluster as usize 
-            * self.boot_sector.bytes_per_sector as usize;
-
-        // Trouver l'index du fichier au lieu d'une référence mutabl
+        
+        // on cherche le fichier par son index
         let file_index = self.files.iter()
             .position(|f| f.name == name)
             .ok_or(FsError::FileNotFound)?;
@@ -167,7 +86,8 @@ impl FileSystem {
         let mut current_cluster = self.files[file_index].first_cluster;
         let mut bytes_written = 0;
 
-        for chunk in content_bytes.chunks(cluster_size) {
+        // on ecrit par morceaux de 512 octets
+        for chunk in content_bytes.chunks(512) {
             if !self.write_cluster(current_cluster, chunk) {
                 return Err(FsError::SystemError);
             }
@@ -186,6 +106,7 @@ impl FileSystem {
         Ok(())
     }
 
+    // lit le contenu d'un fichier
     pub fn read_file(&self, name: &str) -> Result<String, FsError> {
         let file = self.files.iter()
             .find(|f| f.name == name)
@@ -210,10 +131,12 @@ impl FileSystem {
         String::from_utf8(content).map_err(|_| FsError::SystemError)
     }
 
+    // liste tous les fichiers
     pub fn list_files(&self) -> Result<Vec<String>, FsError> {
         Ok(self.files.iter().map(|f| f.name.clone()).collect())
     }
 
+    // trouve un cluster libre
     fn allocate_cluster(&mut self) -> Option<u32> {
         for (i, &entry) in self.fat_table.iter().enumerate() {
             if entry == 0 {
@@ -224,42 +147,35 @@ impl FileSystem {
         None
     }
 
+    // lit un cluster de données
     fn read_cluster(&self, cluster: u32) -> Option<&[u8]> {
-        let cluster_size = self.boot_sector.sectors_per_cluster as usize 
-            * self.boot_sector.bytes_per_sector as usize;
-        let start = (cluster as usize - 2) * cluster_size;
-        
+        let start = cluster as usize * 512;
         if start >= self.data_region.len() {
             return None;
         }
-        
-        let end = start + cluster_size;
+        let end = start + 512;
         if end > self.data_region.len() {
             return None;
         }
-        
         Some(&self.data_region[start..end])
     }
 
+    // ecrit dans un cluster
     fn write_cluster(&mut self, cluster: u32, data: &[u8]) -> bool {
-        let cluster_size = self.boot_sector.sectors_per_cluster as usize 
-            * self.boot_sector.bytes_per_sector as usize;
-        let start = (cluster as usize - 2) * cluster_size;
-        
+        let start = cluster as usize * 512;
         if start >= self.data_region.len() {
             return false;
         }
-        
         let end = start + data.len();
         if end > self.data_region.len() {
             return false;
         }
-        
         self.data_region[start..end].copy_from_slice(data);
         true
     }
 }
 
+// instance globale du fs
 lazy_static! {
     pub static ref FS: Mutex<FileSystem> = Mutex::new(FileSystem::new());
 }
