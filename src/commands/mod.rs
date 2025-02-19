@@ -22,10 +22,15 @@ impl CommandBuffer {
         }
     }
 
+    pub fn clear(&mut self) {
+        self.buffer.clear();
+    }
+
     pub fn backspace(&mut self) {
         if !self.buffer.is_empty() {
             self.buffer.pop();
-            print!("\x08 \x08");
+            // déplace le curseur en arrière, efface le caractère, et redéplace le curseur
+            print!("\u{8} \u{8}");
         }
     }
 

@@ -12,47 +12,44 @@ use futures_util::{
 use pc_keyboard::{layouts, DecodedKey, HandleControl, Keyboard, ScancodeSet1};
 use alloc::boxed::Box;
 use crate::commands::CommandBuffer;
+
 static SCANCODE_QUEUE: OnceCell<ArrayQueue<u8>> = OnceCell::uninit();
 static WAKER: AtomicWaker = AtomicWaker::new();
 static COMMAND_BUFFER: OnceCell<Box<spin::Mutex<CommandBuffer>>> = OnceCell::uninit();
 
-/// Called by the keyboard interrupt handler
-///
-/// Must not block or allocate.
-pub(crate) fn add_scancode(scancode: u8) { // pour les interruptions clavier
+pub(crate) fn add_scancode(scancode: u8) {
     if let Ok(queue) = SCANCODE_QUEUE.try_get() {
         if let Err(_) = queue.push(scancode) {
-            println!("WARNING: scancode queue full; dropping keyboard input");
+            println!("attention: queue pleine");
         } else {
             WAKER.wake();
         }
     } else {
-        println!("WARNING: scancode queue uninitialized");
+        println!("attention: queue non initialisée");
     }
 }
 
-pub struct ScancodeStream { 
+pub struct ScancodeStream {
     _private: (),
 }
 
-impl ScancodeStream { // impl pour ScancodeStream qui fait partie de futures_util
+impl ScancodeStream {
     pub fn new() -> Self {
         SCANCODE_QUEUE
             .try_init_once(|| ArrayQueue::new(100))
-            .expect("ScancodeStream::new should only be called once");
+            .expect("ScancodeStream::new doit etre appelé une seule fois");
         ScancodeStream { _private: () }
     }
 }
 
-impl Stream for ScancodeStream { // pour les interruptions clavier et les scancodes
+impl Stream for ScancodeStream {
     type Item = u8;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<u8>> {
         let queue = SCANCODE_QUEUE
             .try_get()
-            .expect("scancode queue not initialized");
+            .expect("queue non initialisée");
 
-        // fast path
         if let Some(scancode) = queue.pop() {
             return Poll::Ready(Some(scancode));
         }
@@ -73,29 +70,52 @@ pub async fn print_keypresses() {
     let mut keyboard = Keyboard::new(
         ScancodeSet1::new(),
         layouts::Us104Key,
-        HandleControl::Ignore,
+        HandleControl::MapLettersToUnicode
     );
 
-    // buffer d'initialisation
     COMMAND_BUFFER.try_init_once(|| {
         Box::new(spin::Mutex::new(CommandBuffer::new()))
-    }).expect("CommandBuffer already initialized");
+    }).expect("CommandBuffer déjà initialisé");
 
-    print!("> "); // prompt par défaut pour le shell
+    print!("> ");
+
+    let mut ctrl_pressed = false;
 
     while let Some(scancode) = scancodes.next().await {
+        // check si c'est la touche CTRL (0x1D pour appuyé, 0x9D pour relâché)
+        if scancode == 0x1D {
+            ctrl_pressed = true;
+            continue;
+        } else if scancode == 0x9D {
+            ctrl_pressed = false;
+            continue;
+        }
+
         if let Ok(Some(key_event)) = keyboard.add_byte(scancode) {
             if let Some(key) = keyboard.process_keyevent(key_event) {
                 match key {
                     DecodedKey::Unicode(character) => {
-                        match character {
-                            '\n' => COMMAND_BUFFER.try_get().unwrap().lock().execute(),
-                            '\x08' => COMMAND_BUFFER.try_get().unwrap().lock().backspace(), // Backspace
-                            c if c.is_ascii() => COMMAND_BUFFER.try_get().unwrap().lock().add_char(c),
-                            _ => (), // ignorer les caractères non-ASCII
+                        if ctrl_pressed && character == 'c' {
+                            println!("\ncommande interrompue");
+                            print!("> ");
+                            COMMAND_BUFFER.try_get().unwrap().lock().clear();
+                            continue;
                         }
-                    },
-                    DecodedKey::RawKey(_) => (), // Ignorer les touches spéciales
+
+                        match character {
+                            '\u{8}' | '\u{7f}' => {
+                                COMMAND_BUFFER.try_get().unwrap().lock().backspace();
+                            }
+                            '\n' => {
+                                COMMAND_BUFFER.try_get().unwrap().lock().execute();
+                            }
+                            c if c.is_ascii() && !c.is_control() => {
+                                COMMAND_BUFFER.try_get().unwrap().lock().add_char(c);
+                            }
+                            _ => {}
+                        }
+                    }
+                    DecodedKey::RawKey(_) => {}
                 }
             }
         }
