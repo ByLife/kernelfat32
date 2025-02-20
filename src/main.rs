@@ -19,7 +19,7 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
     use blog_os::memory::{self, BootInfoFrameAllocator};
     use x86_64::VirtAddr;
 
-    println!("Hello World{}", "!");
+    println!("Kernel Systeme FAT32 cree par Leo Haidar & Luc Martin{}", "!");
     blog_os::init();
 
     let phys_mem_offset = VirtAddr::new(boot_info.physical_memory_offset);
@@ -58,6 +58,10 @@ async fn async_number() -> u32 {
 async fn example_task() {
     let number = async_number().await;
     println!("async number: {}", number);
+
+    println!();
+    println!("Pour commencer, tapez 'help' pour voir les commandes disponibles");
+    println!();
 }
 
 #[test_case]

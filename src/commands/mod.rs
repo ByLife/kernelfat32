@@ -42,12 +42,12 @@ impl CommandBuffer {
             let parts: alloc::vec::Vec<&str> = input.split_whitespace().collect();
             let command = parts[0];
             let args = &parts[1..];
-
-            match command { // match pour les commandes
-                "help" => print_help(), 
+    
+            match command {
+                "help" => print_help(),
                 "touch" => {
                     if args.len() != 1 {
-                        println!("usage: touch <filename>");
+                        println!("usage: touch <fichier>");
                     } else {
                         match FS.lock().create_file(args[0]) {
                             Ok(_) => println!("fichier cree: {}", args[0]),
@@ -57,7 +57,7 @@ impl CommandBuffer {
                 },
                 "cat" => {
                     if args.len() != 1 {
-                        println!("usage: cat <filename>");
+                        println!("usage: cat <fichier>");
                     } else {
                         match FS.lock().read_file(args[0]) {
                             Ok(content) => println!("{}", content),
@@ -67,7 +67,7 @@ impl CommandBuffer {
                 },
                 "write" => {
                     if args.len() < 2 {
-                        println!("usage: write <filename> <contenu>");
+                        println!("usage: write <fichier> <contenu>");
                     } else {
                         let content = args[1..].join(" ");
                         match FS.lock().write_file(args[0], &content) {
@@ -78,15 +78,54 @@ impl CommandBuffer {
                 },
                 "ls" => {
                     match FS.lock().list_files() {
-                        Ok(files) => {
-                            if files.is_empty() {
+                        Ok(entries) => {
+                            if entries.is_empty() {
                                 println!("pas de fichiers");
                             } else {
-                                for file in files {
-                                    println!("{}", file);
+                                for (name, is_dir) in entries {
+                                    if is_dir {
+                                        print!("[DIR] ");
+                                    }
+                                    println!("{}", name);
                                 }
                             }
                         },
+                        Err(e) => println!("erreur: {:?}", e),
+                    }
+                },
+                "rm" => {
+                    if args.len() != 1 {
+                        println!("usage: rm <fichier>");
+                    } else {
+                        match FS.lock().remove(args[0]) {
+                            Ok(_) => println!("supprime: {}", args[0]),
+                            Err(e) => println!("erreur: {:?}", e),
+                        }
+                    }
+                },
+                "mkdir" => {
+                    if args.len() != 1 {
+                        println!("usage: mkdir <repertoire>");
+                    } else {
+                        match FS.lock().create_directory(args[0]) {
+                            Ok(_) => println!("repertoire cree: {}", args[0]),
+                            Err(e) => println!("erreur: {:?}", e),
+                        }
+                    }
+                },
+                "cd" => {
+                    if args.len() != 1 {
+                        println!("usage: cd <repertoire>");
+                    } else {
+                        match FS.lock().change_directory(args[0]) {
+                            Ok(_) => (),
+                            Err(e) => println!("erreur: {:?}", e),
+                        }
+                    }
+                },
+                "pwd" => {
+                    match FS.lock().print_working_directory() {
+                        Ok(path) => println!("{}", path),
                         Err(e) => println!("erreur: {:?}", e),
                     }
                 },
@@ -105,4 +144,8 @@ fn print_help() {
     println!("  cat <fichier>    - affiche un fichier");
     println!("  write <fichier> <texte> - ecrit dans un fichier");
     println!("  ls              - liste les fichiers");
+    println!("  rm <fichier>     - supprime un fichier");
+    println!("  mkdir <repertoire> - cree un repertoire");
+    println!("  cd <repertoire>  - change de repertoire");
+    println!("  pwd             - affiche le repertoire courant");
 }
