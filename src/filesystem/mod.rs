@@ -4,7 +4,7 @@ use lazy_static::lazy_static;
 use spin::Mutex;
 use alloc::format;
 
-#[derive(Debug)]
+#[derive(Debug)] // permet d'utiliser la macro `{:?}` pour afficher les erreurs
 pub enum FsError {
     FileNotFound,
     FileAlreadyExists,
@@ -16,7 +16,7 @@ pub enum FsError {
     DirectoryNotEmpty,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone)] // permet de cloner les noeuds du système de fichiers
 pub enum FsNode {
     File {
         name: String,
@@ -28,7 +28,7 @@ pub enum FsNode {
     }
 }
 
-impl FsNode {
+impl FsNode { // implémentation de FsNode
     pub fn new_file(name: String) -> Self {
         FsNode::File {
             name,
@@ -36,14 +36,14 @@ impl FsNode {
         }
     }
 
-    pub fn new_directory(name: String) -> Self {
+    pub fn new_directory(name: String) -> Self { // crée un nouveau répertoire
         FsNode::Directory {
             name,
             children: Vec::new(),
         }
     }
 
-    pub fn name(&self) -> &str {
+    pub fn name(&self) -> &str { // retourne le nom du noeud
         match self {
             FsNode::File { name, .. } => name,
             FsNode::Directory { name, .. } => name,
@@ -51,8 +51,8 @@ impl FsNode {
     }
 }
 
-#[derive(Debug)]
-pub struct FileSystem {
+#[derive(Debug)] 
+pub struct FileSystem { // FileSystem
     root: FsNode,
     current_path: Vec<String>,
 }
@@ -60,12 +60,12 @@ pub struct FileSystem {
 impl FileSystem {
     pub fn new() -> Self {
         FileSystem {
-            root: FsNode::new_directory(String::from("/")),
+            root: FsNode::new_directory(String::from("/")), // crée un répertoire racine
             current_path: Vec::new(),
         }
     }
 
-    pub fn current_directory(&mut self) -> Result<&mut FsNode, FsError> {
+    pub fn current_directory(&mut self) -> Result<&mut FsNode, FsError> { // retourne le répertoire courant
         let mut current = &mut self.root;
         for name in &self.current_path {
             current = match current {
@@ -80,7 +80,7 @@ impl FileSystem {
         Ok(current)
     }
 
-    pub fn create_directory(&mut self, name: &str) -> Result<(), FsError> {
+    pub fn create_directory(&mut self, name: &str) -> Result<(), FsError> { // crée un répertoire
         if name.len() > 64 {
             return Err(FsError::InvalidName);
         }
@@ -98,7 +98,7 @@ impl FileSystem {
         Ok(())
     }
 
-    pub fn change_directory(&mut self, path: &str) -> Result<(), FsError> {
+    pub fn change_directory(&mut self, path: &str) -> Result<(), FsError> { // change de répertoire
         if path == ".." {
             if !self.current_path.is_empty() {
                 self.current_path.pop();
@@ -128,6 +128,108 @@ impl FileSystem {
             _ => Err(FsError::NotADirectory),
         }
     }
+
+    fn get_directory_at_path_mut(&mut self, path: &Vec<String>) -> Result<&mut FsNode, FsError> { // retourne le répertoire à un chemin donné
+        let mut current = &mut self.root;
+        for name in path {
+            current = match current {
+                FsNode::Directory { children, .. } => {
+                    children.iter_mut()
+                        .find(|node| node.name() == name)
+                        .ok_or(FsError::FileNotFound)?
+                },
+                _ => return Err(FsError::NotADirectory),
+            }
+        }
+        Ok(current)
+    }
+
+    pub fn move_node(&mut self, source: &str, destination: &str) -> Result<(), FsError> { // déplace un noeud
+        if destination == ".." {
+            let current_path = self.current_path.clone();
+            if current_path.is_empty() {
+                return Err(FsError::SystemError);
+            }
+            let (node, source_index) = {
+                let current_dir = match self.current_directory()? {
+                    FsNode::Directory { children, .. } => children,
+                    _ => return Err(FsError::NotADirectory),
+                };
+                let source_index = current_dir
+                    .iter()
+                    .position(|node| node.name() == source)
+                    .ok_or(FsError::FileNotFound)?;
+                (current_dir.remove(source_index), source_index)
+            }; 
+
+            let mut parent_path = current_path;
+            parent_path.pop();
+            let parent_dir = self.get_directory_at_path_mut(&parent_path)?;
+            match parent_dir {
+                FsNode::Directory { children, .. } => {
+                    if children.iter().any(|n| n.name() == node.name()) {
+                        let current_dir = match self.current_directory()? {
+                            FsNode::Directory { children, .. } => children,
+                            _ => return Err(FsError::NotADirectory),
+                        };
+                        current_dir.insert(source_index, node);
+                        return Err(FsError::FileAlreadyExists);
+                    }
+                    children.push(node);
+                    Ok(())
+                }
+                _ => Err(FsError::NotADirectory),
+            }
+        } else {
+            let current_dir = match self.current_directory()? {
+                FsNode::Directory { children, .. } => children,
+                _ => return Err(FsError::NotADirectory),
+            };
+    
+            let source_index = current_dir.iter()
+                .position(|node| node.name() == source)
+                .ok_or(FsError::FileNotFound)?;
+    
+            let dest_dir_index = current_dir.iter()
+                .position(|node| {
+                    if node.name() == destination {
+                        matches!(node, FsNode::Directory { .. })
+                    } else {
+                        false
+                    }
+                });
+    
+            if let Some(mut dest_idx) = dest_dir_index {
+                if source_index < dest_idx {
+                    dest_idx -= 1;
+                }
+                let source_node = current_dir.remove(source_index);
+                if let FsNode::Directory { children, .. } = &mut current_dir[dest_idx] {
+                    if children.iter().any(|node| node.name() == source) {
+                        current_dir.insert(source_index, source_node);
+                        return Err(FsError::FileAlreadyExists);
+                    }
+                    children.push(source_node);
+                    Ok(())
+                } else {
+                    current_dir.insert(source_index, source_node);
+                    Err(FsError::NotADirectory)
+                }
+            } else {
+                if current_dir.iter().any(|node| node.name() == destination) {
+                    return Err(FsError::FileAlreadyExists);
+                }
+                let mut node = current_dir.remove(source_index);
+                match node {
+                    FsNode::File { ref mut name, .. } => *name = String::from(destination),
+                    FsNode::Directory { ref mut name, .. } => *name = String::from(destination),
+                }
+                current_dir.push(node);
+                Ok(())
+            }
+        }
+    }
+    
 
     pub fn print_working_directory(&self) -> Result<String, FsError> {
         if self.current_path.is_empty() {

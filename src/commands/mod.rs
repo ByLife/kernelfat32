@@ -34,7 +34,7 @@ impl CommandBuffer {
         }
     }
 
-    pub fn execute(&mut self) {
+    pub fn execute(&mut self) { // execute la commande
         println!();
         let input = self.buffer.trim();
         
@@ -129,6 +129,18 @@ impl CommandBuffer {
                         Err(e) => println!("erreur: {:?}", e),
                     }
                 },
+
+                "mv" => {
+                if args.len() != 2 {
+                    println!("usage: mv <source> <destination>");
+                } else {
+                    match FS.lock().move_node(args[0], args[1]) {
+                        Ok(_) => println!("deplace: {} -> {}", args[0], args[1]),
+                        Err(e) => println!("erreur: {:?}", e),
+                    }
+                }
+            },
+
                 _ => println!("commande inconnue: '{}'. tape 'help'", command),
             }
         }
@@ -148,4 +160,5 @@ fn print_help() {
     println!("  mkdir <repertoire> - cree un repertoire");
     println!("  cd <repertoire>  - change de repertoire");
     println!("  pwd             - affiche le repertoire courant");
+    println!("  mv <src> <dst>  - deplace un fichier ou repertoire");
 }
