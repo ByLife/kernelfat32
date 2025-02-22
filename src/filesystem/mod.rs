@@ -111,7 +111,7 @@ impl FileSystem {
             return Ok(());
         }
 
-        let current_dir = match self.current_directory()? {
+        let current_dir = match self.current_directory()? { // retourne le répertoire courant
             FsNode::Directory { children, .. } => children,
             _ => return Err(FsError::NotADirectory),
         };
@@ -164,7 +164,7 @@ impl FileSystem {
 
             let mut parent_path = current_path;
             parent_path.pop();
-            let parent_dir = self.get_directory_at_path_mut(&parent_path)?;
+            let parent_dir = self.get_directory_at_path_mut(&parent_path)?; // retourne le répertoire à un chemin donné
             match parent_dir {
                 FsNode::Directory { children, .. } => {
                     if children.iter().any(|n| n.name() == node.name()) {
@@ -181,7 +181,7 @@ impl FileSystem {
                 _ => Err(FsError::NotADirectory),
             }
         } else {
-            let current_dir = match self.current_directory()? {
+            let current_dir = match self.current_directory()? { // retourne le répertoire courant
                 FsNode::Directory { children, .. } => children,
                 _ => return Err(FsError::NotADirectory),
             };
@@ -199,20 +199,20 @@ impl FileSystem {
                     }
                 });
     
-            if let Some(mut dest_idx) = dest_dir_index {
+            if let Some(mut dest_idx) = dest_dir_index { // déplace un noeud
                 if source_index < dest_idx {
                     dest_idx -= 1;
                 }
                 let source_node = current_dir.remove(source_index);
-                if let FsNode::Directory { children, .. } = &mut current_dir[dest_idx] {
+                if let FsNode::Directory { children, .. } = &mut current_dir[dest_idx] { 
                     if children.iter().any(|node| node.name() == source) {
                         current_dir.insert(source_index, source_node);
                         return Err(FsError::FileAlreadyExists);
                     }
                     children.push(source_node);
                     Ok(())
-                } else {
-                    current_dir.insert(source_index, source_node);
+                } else { // si le noeud n'est pas un répertoire
+                    current_dir.insert(source_index, source_node); 
                     Err(FsError::NotADirectory)
                 }
             } else {
@@ -231,7 +231,7 @@ impl FileSystem {
     }
     
 
-    pub fn print_working_directory(&self) -> Result<String, FsError> {
+    pub fn print_working_directory(&self) -> Result<String, FsError> { // affiche le répertoire courant
         if self.current_path.is_empty() {
             Ok(String::from("/"))
         } else {
@@ -239,7 +239,7 @@ impl FileSystem {
         }
     }
 
-    pub fn create_file(&mut self, name: &str) -> Result<(), FsError> {
+    pub fn create_file(&mut self, name: &str) -> Result<(), FsError> { // crée un fichier
         if name.len() > 64 {
             return Err(FsError::InvalidName);
         }
@@ -257,7 +257,7 @@ impl FileSystem {
         Ok(())
     }
 
-    pub fn write_file(&mut self, name: &str, content: &str) -> Result<(), FsError> {
+    pub fn write_file(&mut self, name: &str, content: &str) -> Result<(), FsError> { // écrit dans un fichier
         let current_dir = match self.current_directory()? {
             FsNode::Directory { children, .. } => children,
             _ => return Err(FsError::NotADirectory),
@@ -276,7 +276,7 @@ impl FileSystem {
         }
     }
 
-    pub fn read_file(&self, name: &str) -> Result<String, FsError> {
+    pub fn read_file(&self, name: &str) -> Result<String, FsError> { // lit un fichier
         let current_dir = match self.current_directory_ref()? {
             FsNode::Directory { children, .. } => children,
             _ => return Err(FsError::NotADirectory),
@@ -292,7 +292,7 @@ impl FileSystem {
         }
     }
 
-    pub fn remove(&mut self, name: &str) -> Result<(), FsError> {
+    pub fn remove(&mut self, name: &str) -> Result<(), FsError> {   // supprime un noeud
         let current_dir = match self.current_directory()? {
             FsNode::Directory { children, .. } => children,
             _ => return Err(FsError::NotADirectory),
@@ -303,7 +303,7 @@ impl FileSystem {
             .ok_or(FsError::FileNotFound)?;
 
         match &current_dir[index] {
-            FsNode::Directory { children, .. } if !children.is_empty() => {
+            FsNode::Directory { children, .. } if !children.is_empty() => { // si le répertoire n'est pas vide
                 Err(FsError::DirectoryNotEmpty)
             },
             _ => {
@@ -313,14 +313,14 @@ impl FileSystem {
         }
     }
 
-    pub fn list_files(&self) -> Result<Vec<(String, bool)>, FsError> {
+    pub fn list_files(&self) -> Result<Vec<(String, bool)>, FsError> { // liste les fichiers
         let current_dir = match self.current_directory_ref()? {
             FsNode::Directory { children, .. } => children,
             _ => return Err(FsError::NotADirectory),
         };
 
         Ok(current_dir.iter().map(|node| {
-            (String::from(node.name()), matches!(node, FsNode::Directory { .. }))
+            (String::from(node.name()), matches!(node, FsNode::Directory { .. })) // retourne le nom du noeud
         }).collect())
     }
 
@@ -341,5 +341,5 @@ impl FileSystem {
 }
 
 lazy_static! {
-    pub static ref FS: Mutex<FileSystem> = Mutex::new(FileSystem::new());
+    pub static ref FS: Mutex<FileSystem> = Mutex::new(FileSystem::new()); // crée un système de fichiers
 }

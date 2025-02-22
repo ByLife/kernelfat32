@@ -29,7 +29,7 @@ pub(crate) fn add_scancode(scancode: u8) {
     }
 }
 
-pub struct ScancodeStream {
+pub struct ScancodeStream { // interface pour le clavier
     _private: (),
 }
 
@@ -37,7 +37,7 @@ impl ScancodeStream {
     pub fn new() -> Self {
         SCANCODE_QUEUE
             .try_init_once(|| ArrayQueue::new(100))
-            .expect("ScancodeStream::new doit etre appelé une seule fois");
+            .expect("ScancodeStream::new doit etre appelé une seule fois"); // initialise la queue
         ScancodeStream { _private: () }
     }
 }
@@ -45,7 +45,7 @@ impl ScancodeStream {
 impl Stream for ScancodeStream {
     type Item = u8;
 
-    fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<u8>> {
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<u8>> { // renvoie le prochain scancode
         let queue = SCANCODE_QUEUE
             .try_get()
             .expect("queue non initialisée");
@@ -65,7 +65,7 @@ impl Stream for ScancodeStream {
     }
 }
 
-pub async fn print_keypresses() {
+pub async fn print_keypresses() { 
     let mut scancodes = ScancodeStream::new();
     let mut keyboard = Keyboard::new(
         ScancodeSet1::new(),
@@ -73,7 +73,7 @@ pub async fn print_keypresses() {
         HandleControl::MapLettersToUnicode
     );
 
-    COMMAND_BUFFER.try_init_once(|| {
+    COMMAND_BUFFER.try_init_once(|| { // initialise le CommandBuffer
         Box::new(spin::Mutex::new(CommandBuffer::new()))
     }).expect("CommandBuffer déjà initialisé");
 
@@ -91,10 +91,10 @@ pub async fn print_keypresses() {
             continue;
         }
 
-        if let Ok(Some(key_event)) = keyboard.add_byte(scancode) {
+        if let Ok(Some(key_event)) = keyboard.add_byte(scancode) { // ajoute le scancode
             if let Some(key) = keyboard.process_keyevent(key_event) {
                 match key {
-                    DecodedKey::Unicode(character) => {
+                    DecodedKey::Unicode(character) => { // si c'est un caractère
                         if ctrl_pressed && character == 'c' {
                             println!("\ncommande interrompue");
                             print!("> ");
@@ -103,13 +103,13 @@ pub async fn print_keypresses() {
                         }
 
                         match character {
-                            '\u{8}' | '\u{7f}' => {
+                            '\u{8}' | '\u{7f}' => { // si c'est un backspace
                                 COMMAND_BUFFER.try_get().unwrap().lock().backspace();
                             }
-                            '\n' => {
+                            '\n' => { // si c'est un retour à la ligne
                                 COMMAND_BUFFER.try_get().unwrap().lock().execute();
                             }
-                            c if c.is_ascii() && !c.is_control() => {
+                            c if c.is_ascii() && !c.is_control() => { // si c'est un caractère ASCII
                                 COMMAND_BUFFER.try_get().unwrap().lock().add_char(c);
                             }
                             _ => {}

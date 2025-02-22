@@ -45,11 +45,11 @@ impl CommandBuffer {
     
             match command {
                 "help" => print_help(),
-                "touch" => {
-                    if args.len() != 1 {
+                "touch" => { 
+                    if args.len() != 1 { // si le nombre d'arguments est différent de 1
                         println!("usage: touch <fichier>");
                     } else {
-                        match FS.lock().create_file(args[0]) {
+                        match FS.lock().create_file(args[0]) { // crée un fichier
                             Ok(_) => println!("fichier cree: {}", args[0]),
                             Err(e) => println!("erreur: {:?}", e),
                         }
@@ -82,8 +82,8 @@ impl CommandBuffer {
                             if entries.is_empty() {
                                 println!("pas de fichiers");
                             } else {
-                                for (name, is_dir) in entries {
-                                    if is_dir {
+                                for (name, is_dir) in entries { // affiche les fichiers et répertoires
+                                    if is_dir { // si c'est un répertoire
                                         print!("[DIR] ");
                                     }
                                     println!("{}", name);
