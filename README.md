@@ -52,4 +52,4 @@ Ensuite, il faut effectuer la commande `qemu-system-x86_64 -drive format=raw,fil
 
 ## License
 
-Ce projet est sous license MIT
+Ce projet est sous license MIT !
