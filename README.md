@@ -1,77 +1,55 @@
-# Blog OS (Async/Await)
+# Kernel avec système de fichier en FAT32
 
-[![Build Status](https://github.com/phil-opp/blog_os/workflows/Code/badge.svg?branch=post-12)](https://github.com/phil-opp/blog_os/actions?query=workflow%3A%22Code%22+branch%3Apost-12)
+## Objectif
 
-This repository contains the source code for the [Async/Await][post] post of the [Writing an OS in Rust](https://os.phil-opp.com) series.
+Ce kernel permet de charger un système de fichier en FAT32 et d'effectuer des opérations basiques dessus.
 
-[post]: https://os.phil-opp.com/async-await/
+Comme:
+- Lister les fichiers
+- Lire un fichier
+- Écrire un fichier
+- Créer un fichier
+- Supprimer un fichier
+- Renommer un fichier 
+- Déplacer un fichier 
+- Créer un dossier
+- Navigation dans les dossiers
+- Affichage du chemin actuel
 
-**Check out the [master branch](https://github.com/phil-opp/blog_os) for more information.**
 
-## Building
+## Compilation
 
-This project requires a nightly version of Rust because it uses some unstable features. At least nightly _2020-07-15_ is required for building. You might need to run `rustup update nightly --force` to update to the latest nightly even if some components such as `rustfmt` are missing it.
+Pour compiler le kernel, il suffit de lancer la commande `cargo bootimage`.
 
-You can build the project by running:
+## Lancement
 
-```
-cargo build
-```
+Pour lancer le kernel, il faut avoir qemu installé et lancer la commande `qemu-img create -f raw disk.img 100M` pour créer un disque virtuel de 100M. 
 
-To create a bootable disk image from the compiled kernel, you need to install the [`bootimage`] tool:
+Ensuite, il faut effectuer la commande `qemu-system-x86_64 -drive format=raw,file=<chemin> -drive format=raw,file=disk.img,if=ide` en remplaçant le chemin du fichier par le chemin du fichier généré par la compilation suite au lancement de la commande `cargo bootimage`. (car il vous donnera le chemin du fichier généré .bin)
 
-[`bootimage`]: https://github.com/rust-osdev/bootimage
+## Fonctionnalités
 
-```
-cargo install bootimage
-```
+- [x] Lister les fichiers avec la commande `ls`
+- [x] Lire un fichier avec la commande `cat` 
+- [x] Écrire un fichier avec la commande `echo`
+- [x] Créer un fichier avec la commande `touch`
+- [x] Supprimer un fichier avec la commande `rm`
+- [x] Renommer un fichier avec la commande `mv`
+- [x] Déplacer un fichier avec la commande `mv`
+- [x] Créer un dossier avec la commande `mkdir`
+- [x] Navigation dans les dossiers avec la commande `cd`
+- [x] Affichage du chemin actuel avec la commande `pwd`
+- [x] Support des fichiers de plus de 1 cluster
 
-After installing, you can create the bootable disk image by running:
+## Fonctionnalités à venir
 
-```
-cargo bootimage
-```
+- Fini (pour l'instant)
 
-This creates a bootable disk image in the `target/x86_64-blog_os/debug` directory.
+## Auteurs
 
-Please file an issue if you have any problems.
-
-## Running
-
-You can run the disk image in [QEMU] through:
-
-[QEMU]: https://www.qemu.org/
-
-```
-cargo run
-```
-
-[QEMU] and the [`bootimage`] tool need to be installed for this.
-
-You can also write the image to an USB stick for booting it on a real machine. On Linux, the command for this is:
-
-```
-dd if=target/x86_64-blog_os/debug/bootimage-blog_os.bin of=/dev/sdX && sync
-```
-
-Where `sdX` is the device name of your USB stick. **Be careful** to choose the correct device name, because everything on that device is overwritten.
-
-## Testing
-
-To run the unit and integration tests, execute `cargo xtest`.
+- Léo Haidar
+- Luc Martin
 
 ## License
 
-Licensed under either of
-
-- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or
-  http://www.apache.org/licenses/LICENSE-2.0)
-- MIT license ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
-
-at your option.
-
-Note that this only applies to this git branch, other branches might be licensed differently.
-
-### Contribution
-
-Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in the work by you, as defined in the Apache-2.0 license, shall be dual licensed as above, without any additional terms or conditions.
+Ce projet est sous license MIT
