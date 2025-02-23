@@ -69,8 +69,8 @@ impl FileSystem {
         let mut current = &mut self.root;
         for name in &self.current_path {
             current = match current {
-                FsNode::Directory { children, .. } => {
-                    children.iter_mut()
+                FsNode::Directory { children, .. } => { // si le noeud est un répertoire
+                    children.iter_mut() // retourne un itérateur mutable
                         .find(|node| node.name() == name)
                         .ok_or(FsError::FileNotFound)?
                 },
@@ -107,7 +107,7 @@ impl FileSystem {
         }
 
         if path == "/" {
-            self.current_path.clear();
+            self.current_path.clear(); // efface le chemin
             return Ok(());
         }
 
@@ -134,9 +134,9 @@ impl FileSystem {
         for name in path {
             current = match current {
                 FsNode::Directory { children, .. } => {
-                    children.iter_mut()
+                    children.iter_mut() // retourne un itérateur mutable
                         .find(|node| node.name() == name)
-                        .ok_or(FsError::FileNotFound)?
+                        .ok_or(FsError::FileNotFound)? // retourne une erreur si le noeud n'est pas trouvé
                 },
                 _ => return Err(FsError::NotADirectory),
             }
@@ -151,11 +151,11 @@ impl FileSystem {
                 return Err(FsError::SystemError);
             }
             let (node, source_index) = {
-                let current_dir = match self.current_directory()? {
+                let current_dir = match self.current_directory()? { // retourne le répertoire courant
                     FsNode::Directory { children, .. } => children,
                     _ => return Err(FsError::NotADirectory),
                 };
-                let source_index = current_dir
+                let source_index = current_dir  // retourne l'index du noeud source
                     .iter()
                     .position(|node| node.name() == source)
                     .ok_or(FsError::FileNotFound)?;
@@ -186,7 +186,7 @@ impl FileSystem {
                 _ => return Err(FsError::NotADirectory),
             };
     
-            let source_index = current_dir.iter()
+            let source_index = current_dir.iter() // retourne l'index du noeud source
                 .position(|node| node.name() == source)
                 .ok_or(FsError::FileNotFound)?;
     
@@ -244,16 +244,16 @@ impl FileSystem {
             return Err(FsError::InvalidName);
         }
 
-        let current_dir = match self.current_directory()? {
+        let current_dir = match self.current_directory()? { // retourne le répertoire courant
             FsNode::Directory { children, .. } => children,
             _ => return Err(FsError::NotADirectory),
         };
 
-        if current_dir.iter().any(|node| node.name() == name) {
+        if current_dir.iter().any(|node| node.name() == name) { // retourne une erreur si le fichier existe déjà
             return Err(FsError::FileAlreadyExists);
         }
 
-        current_dir.push(FsNode::new_file(String::from(name)));
+        current_dir.push(FsNode::new_file(String::from(name))); // crée un nouveau fichier
         Ok(())
     }
 
@@ -268,7 +268,7 @@ impl FileSystem {
             .ok_or(FsError::FileNotFound)?;
 
         match file {
-            FsNode::File { content: file_content, .. } => {
+            FsNode::File { content: file_content, .. } => { // si le noeud est un fichier
                 *file_content = String::from(content);
                 Ok(())
             }
@@ -331,9 +331,9 @@ impl FileSystem {
                 FsNode::Directory { children, .. } => {
                     children.iter()
                         .find(|node| node.name() == name)
-                        .ok_or(FsError::FileNotFound)?
+                        .ok_or(FsError::FileNotFound)? // retourne une erreur si le noeud n'est pas trouvé
                 },
-                _ => return Err(FsError::NotADirectory),
+                _ => return Err(FsError::NotADirectory), // retourne une erreur si le noeud n'est pas un répertoire
             };
         }
         Ok(current)

@@ -4,19 +4,19 @@ use crate::filesystem::FS;
 
 const MAX_CMD_LENGTH: usize = 64; // augmenté à 64 caractères
 
-pub struct CommandBuffer {
+pub struct CommandBuffer { // structure de la commande
     buffer: String,
 }
 
-impl CommandBuffer {
+impl CommandBuffer { // implémentation de la commande pour les méthodes de la structure CommandBuffer
     pub fn new() -> Self {
         CommandBuffer {
-            buffer: String::with_capacity(MAX_CMD_LENGTH),
+            buffer: String::with_capacity(MAX_CMD_LENGTH), // crée un buffer de taille MAX_CMD_LENGTH (64 dans ce cas)
         }
     }
 
     pub fn add_char(&mut self, c: char) {
-        if self.buffer.len() < MAX_CMD_LENGTH {
+        if self.buffer.len() < MAX_CMD_LENGTH { // si la taille du buffer est inférieure à MAX_CMD_LENGTH
             self.buffer.push(c);
             print!("{}", c);
         }
@@ -27,7 +27,7 @@ impl CommandBuffer {
     }
 
     pub fn backspace(&mut self) {
-        if !self.buffer.is_empty() {
+        if !self.buffer.is_empty() { // si le buffer n'est pas vide
             self.buffer.pop();
             // déplace le curseur en arrière, efface le caractère, et redéplace le curseur
             print!("\u{8} \u{8}");
@@ -60,8 +60,8 @@ impl CommandBuffer {
                         println!("usage: cat <fichier>");
                     } else {
                         match FS.lock().read_file(args[0]) {
-                            Ok(content) => println!("{}", content),
-                            Err(e) => println!("erreur: {:?}", e),
+                            Ok(content) => println!("{}", content), // affiche le contenu du fichier
+                            Err(e) => println!("erreur: {:?}", e), // affiche l'erreur
                         }
                     }
                 },
@@ -71,8 +71,8 @@ impl CommandBuffer {
                     } else {
                         let content = args[1..].join(" ");
                         match FS.lock().write_file(args[0], &content) {
-                            Ok(_) => println!("ecrit dans: {}", args[0]),
-                            Err(e) => println!("erreur: {:?}", e),
+                            Ok(_) => println!("ecrit dans: {}", args[0]), // écrit dans le fichier
+                            Err(e) => println!("erreur: {:?}", e), // affiche l'erreur
                         }
                     }
                 },
@@ -97,8 +97,8 @@ impl CommandBuffer {
                     if args.len() != 1 {
                         println!("usage: rm <fichier>");
                     } else {
-                        match FS.lock().remove(args[0]) {
-                            Ok(_) => println!("supprime: {}", args[0]),
+                        match FS.lock().remove(args[0]) {  // supprime le fichier
+                            Ok(_) => println!("supprime: {}", args[0]), 
                             Err(e) => println!("erreur: {:?}", e),
                         }
                     }
@@ -107,7 +107,7 @@ impl CommandBuffer {
                     if args.len() != 1 {
                         println!("usage: mkdir <repertoire>");
                     } else {
-                        match FS.lock().create_directory(args[0]) {
+                        match FS.lock().create_directory(args[0]) { // crée un répertoire
                             Ok(_) => println!("repertoire cree: {}", args[0]),
                             Err(e) => println!("erreur: {:?}", e),
                         }
@@ -117,7 +117,7 @@ impl CommandBuffer {
                     if args.len() != 1 {
                         println!("usage: cd <repertoire>");
                     } else {
-                        match FS.lock().change_directory(args[0]) {
+                        match FS.lock().change_directory(args[0]) { // change de répertoire
                             Ok(_) => (),
                             Err(e) => println!("erreur: {:?}", e),
                         }
@@ -132,9 +132,9 @@ impl CommandBuffer {
 
                 "mv" => {
                 if args.len() != 2 {
-                    println!("usage: mv <source> <destination>");
+                    println!("usage: mv <source> <destination>"); 
                 } else {
-                    match FS.lock().move_node(args[0], args[1]) {
+                    match FS.lock().move_node(args[0], args[1]) { // déplace un fichier ou un répertoire
                         Ok(_) => println!("deplace: {} -> {}", args[0], args[1]),
                         Err(e) => println!("erreur: {:?}", e),
                     }
